@@ -1,0 +1,31 @@
+{
+  "name": "discord-tunebot",
+  "version": "0.1.0",
+  "description": "Discord bot which plays music from YouTube through the voice chat. Includes a queue which cycles between each user's requests.",
+  "main": "bot.js",
+  "dependencies": {
+    "discord.io": "^1.6.5",
+    "node-opus": "^0.1.12",
+    "sqlite3": "^3.1.1",
+    "ytdl-core": "^0.7.9",
+    "bcrypt": "^0.8.5",
+    "py": "^0.0.0",
+    "node-gyp": "^3.2.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "bot",
+    "discord",
+    "app",
+    "youtube",
+    "music",
+    "streaming",
+    "queue",
+    "request"
+  ],
+  "author": "Humphrey Shotton",
+  "license": "ISC"
+}

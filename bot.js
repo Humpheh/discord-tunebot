@@ -92,13 +92,17 @@ var helpstr = "\n`!serverlist`\n        List the id's of the servers the bot can
     "\n`!joinserver <id>`\n        Join a voice/text server to output to." +
     "\n`!play`\n        Begin playing music." +
     "\n`!stop`\n        Stop playing music." +
-    "\n`!queue <youtube id>`\n        Add a song with the YouTube id to the queue." +
-    "\n`!? / !list`\n        List the current play queue." +
+    "\n`!q <youtube id>`\n        Add a song with the YouTube id to the queue." +
+    "\n`!?` / `!list`\n        List the current play queue." +
     "\n`!skip`\n        Skip this song." +
     "\n`!loadpast`\n        Load previously played songs into your queue." +
     "\n`!clearqueue`\n        Clear all songs from your queue." +
     "\n`!removenext`\n        Remove the next song from your queue." +
-    "\n`!h`\n        Show help.";
+    "\n`!h`\n        Show help." +
+    "\n`!shuffle`\n        Shuffle your queue." +
+    "\n`!playlist`\n        Shows the user playlist." +
+    "\n`!add <id seperated by spaces>`\n        Adds songs to the queue (ids from !playlist)." +
+    "\n`!remove <id seperated by spaces>`\n        Removes songs from playlist (ids from !playlist).";
 
 // ====== Setup the Discord bot ====== //
 var bot = new DiscordClient({
@@ -134,6 +138,7 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
         case '!stop':
             stopSong();
             break;
+        case '!q':
         case '!queue':
             if (cmds.length != 2) break;
             queueSong(cmds[1], user);
@@ -157,12 +162,38 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
         case '!removenext':
             removenext(user);
             break;
+        case '!shuffle':
+            shuffleQueue(user);
+            break;
+        case '!playlist':
+            outPlaylist(user, channelID);
+            break;
+        case '!add':
+            var arr = cmds.slice(1);
+            var ids = [];
+            for (i in arr){
+                try{
+                    ids.push(parseInt(arr[i]));
+                } catch (e) {}
+            }
+            queueIds(user, ids);
+            break;
+        case '!remove':
+            var arr = cmds.slice(1);
+            var ids = [];
+            for (i in arr){
+                try{
+                    ids.push(parseInt(arr[i]));
+                } catch (e) {}
+            }
+            removeIds(user, ids);
+            break;
     }
 });
 
 var download = function(id, user) {
     var isvalidchars = /^[a-zA-Z0-9_-]+$/.test(id);
-    if (!isvalidchars || id.length != 11){
+    if (!isvalidchars || id == null || id.length != 11){
         logStatus("Not a valid YouTube ID.");
         return false;
     }
@@ -196,10 +227,10 @@ var download = function(id, user) {
 
 var currentuser;
 var currentsong;
-var voteskip = 0;
 var playing = false;
 var queue = {};
 var usrcycle = [];
+var currentskip = [];
 
 var removenext = function(user){
     if (!(user in queue) || queue[user].length == 0) {
@@ -213,6 +244,13 @@ var removenext = function(user){
 var clearqueue = function(user){
     queue[user] = [];
     logStatus("Cleared " + user + " queue.");
+};
+
+var shuffleQueue = function(user) {
+    if (user in queue) {
+        queue[user] = shuffle(queue[user]);
+        logStatus("Shuffled " + user + " queue.");
+    }
 };
 
 var queueSong = function(id, user, dontnote) {
@@ -300,16 +338,65 @@ var printQueue = function(){
     getdata(idarr, 0);
 };
 
-var loadpast = function(user){
-    var ids = [];
-    db.each("SELECT * FROM playlist WHERE user = ?", user, function(err, row) {
-        ids.push(row.id);
+var getPlaylist = function(user, callback){
+    var rows = [];
+    db.each("SELECT * FROM playlist LEFT JOIN music ON music.id = playlist.id WHERE playlist.user = ?", user, function(err, row) {
+        rows.push(row);
     }, function() {
-        ids = shuffle(ids);
-        for (var i in ids){
-            queueSong(ids[i], user, true);
+        callback(rows);
+    });
+};
+
+var removeIds = function(user, ids){
+    getPlaylist(user, function(rows){
+        var count = 0;
+        for (i in ids){
+            try {
+                db.run("DELETE FROM playlist WHERE user = ? AND id = ?", [user, rows[ids[i]].id]);
+                count += 1;
+            } catch (e) { }
         }
-        logStatus("Added " + ids.length + " songs to queue.");
+        logStatus("Removed " + count + " songs from *" + user + "* playlist.");
+    });
+};
+
+var queueIds = function(user, ids){
+    getPlaylist(user, function(rows){
+        var count = 0;
+        for (i in ids){
+            try {
+                queueSong(rows[ids[i]].id, user, true);
+                count += 1;
+            } catch (e) { }
+        }
+        logStatus("Queued " + count + " songs from *" + user + "* playlist.");
+    });
+};
+
+var outPlaylist = function(user, channelId){
+    getPlaylist(user, function(rows){
+        var outstr = "**" + user + "'s playlist:**\n";
+        for (var i in rows){
+            var row = rows[i];
+            var newstr = "**" + i + "**: '" + row.name + "'\n";
+            if ((outstr + newstr).length >= 2000){
+                //output here
+                bot.sendMessage({ to: channelId, message: outstr });
+                outstr = "";
+            }
+            outstr += newstr;
+        }
+        bot.sendMessage({ to: channelId, message: outstr });
+    });
+};
+
+var loadpast = function(user){
+    getPlaylist(user, function(rows){
+        var shuffled = shuffle(rows);
+        for (var i in shuffled){
+            queueSong(shuffled[i].id, user, true);
+        }
+        logStatus("Added " + rows.length + " songs to queue.");
     });
 };
 
@@ -359,7 +446,7 @@ var playSong = function(id, user){
         }
         currentsong = row;
         currentuser = user;
-        voteskip = 0;
+        currentskip = [];
 
         bot.getAudioContext({ channel: voice_channel, stereo: true}, function(stream) {
             logStatus(":musical_note: **Now Playing:** " + row.name + " *(" + user + ")*");
@@ -387,14 +474,16 @@ var stopSong = function(){
 };
 
 var skipSong = function(user){
-    voteskip += 1;
     if (currentuser == user){
         logStatus("*" + user + "* skipped the song.");
         getNextSong();
-    } else if (voteskip >= config.skip_req) {
-        logStatus(voteskip + " people voted to skip the song.");
+    } else if (currentskip.length >= config.skip_req) {
+        logStatus(currentskip.length + " people voted to skip the song.");
         getNextSong();
+    } else if (currentskip.indexOf(user) == -1) {
+        currentskip.push(user);
+        logStatus(currentskip.length + " votes to skip the song. (" + config.skip_req + " needed)");
     } else {
-        logStatus(voteskip + " votes to skip the song. (" + config.skip_req + " needed)");
+        logStatus(user + " has already attempted to skip the song. " + currentskip.length + "/" + config.skip_req + " so far.");
     }
 };

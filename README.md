@@ -1,7 +1,7 @@
 # discord-tunebot
 Discord bot for playing music requests through voice chat. This is a quick (and messy) bot that takes YouTube requests and plays them back through the voice chat on Discord (<https://discordapp.com/>). This bot is not 100% stable.
 
-The bot takes requests of YouTube videos and downloads them into `.mp3` files. These are then played back by the bot in voice chat. Each user can add videos, and the bot rotates through each user in turn for their request.
+The bot takes requests of YouTube videos streams them through the voice chat. Each user can add videos, and the bot rotates through each user in turn for their request.
 
 ## Installation
 ##### Setup node.js
